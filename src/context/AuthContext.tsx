@@ -85,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestPasswordRecovery = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${import.meta.env.VITE_APP_URL}/reset-password`,
+      redirectTo: `${import.meta.env.VITE_APP_URL || window.location.origin}/reset-password`,
     });
     if (error) return { success: false, message: error.message };
     return { success: true, message: 'E-mail de recuperação enviado.' };

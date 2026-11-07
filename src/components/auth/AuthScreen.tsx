@@ -424,13 +424,6 @@ export const AuthScreen: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[11px] font-medium text-amber-300">Chave Mestre de Autorização</label>
-                  <button
-                    type="button"
-                    onClick={() => setRegAuthKey('MR-PARFUM-2026-KEY')}
-                    className="text-[10px] text-amber-400/80 hover:text-amber-300 underline"
-                  >
-                    Usar Chave Padrão
-                  </button>
                 </div>
                 <div className="relative">
                   <ShieldCheck className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -439,7 +432,7 @@ export const AuthScreen: React.FC = () => {
                     required
                     value={regAuthKey}
                     onChange={(e) => setRegAuthKey(e.target.value)}
-                    placeholder="Chave de segurança (MR-PARFUM-2026-KEY)"
+                    placeholder="Digite a chave de segurança"
                     className="w-full pl-9 pr-3.5 py-2 bg-zinc-950 border border-amber-500/30 rounded-lg text-xs text-amber-200 font-mono focus:outline-none focus:border-amber-400"
                   />
                 </div>

@@ -54,8 +54,12 @@ export const ProductsView: React.FC = () => {
   useEffect(() => {
     reloadData();
     window.addEventListener('mr_database_change', reloadData);
-    return () => window.removeEventListener('mr_database_change', reloadData);
-  }, []);
+    window.addEventListener('open_create_product', handleOpenCreate);
+    return () => {
+      window.removeEventListener('mr_database_change', reloadData);
+      window.removeEventListener('open_create_product', handleOpenCreate);
+    };
+  }, [brands]); // Depend on brands to ensure the select has data
 
   // Search and Filters
   const [searchTerm, setSearchTerm] = useState('');

@@ -173,7 +173,8 @@ export const Database = {
 
   // 1. ADMINS & AUTH (using profiles table)
   async getAdmins(): Promise<AdminUser[]> {
-    const { data } = await supabase.from('profiles').select('*').order('name');
+    const { data, error } = await supabase.from('profiles').select('*').order('name');
+    if (error) console.error('Supabase getAdmins error:', error.message);
     return (data || []).map(mappers.profile);
   },
 
@@ -201,7 +202,8 @@ export const Database = {
 
   // 2. BRANDS
   async getBrands(): Promise<Brand[]> {
-    const { data } = await supabase.from('brands').select('*').order('name');
+    const { data, error } = await supabase.from('brands').select('*').order('name');
+    if (error) console.error('Supabase getBrands error:', error.message);
     return (data || []).map(mappers.brand);
   },
 
@@ -228,7 +230,8 @@ export const Database = {
 
   // 3. PRODUCTS
   async getProducts(): Promise<Product[]> {
-    const { data } = await supabase.from('products').select('*, brands(name)').order('name');
+    const { data, error } = await supabase.from('products').select('*, brands(name)').order('name');
+    if (error) console.error('Supabase getProducts error:', error.message);
     return (data || []).map(mappers.product);
   },
 
@@ -306,7 +309,8 @@ export const Database = {
 
   // 6. CUSTOMERS
   async getCustomers(): Promise<Customer[]> {
-    const { data } = await supabase.from('customers').select('*').order('name');
+    const { data, error } = await supabase.from('customers').select('*').order('name');
+    if (error) console.error('Supabase getCustomers error:', error.message);
     return (data || []).map(mappers.customer);
   },
 
@@ -336,7 +340,8 @@ export const Database = {
 
   // 7. APPOINTMENTS
   async getAppointments(): Promise<CustomerAppointment[]> {
-    const { data } = await supabase.from('appointments').select('*').order('date', { ascending: false });
+    const { data, error } = await supabase.from('appointments').select('*').order('date', { ascending: false });
+    if (error) console.error('Supabase getAppointments error:', error.message);
     return (data || []).map(mappers.appointment);
   },
 
@@ -368,7 +373,8 @@ export const Database = {
 
   // 8. ORDERS
   async getOrders(): Promise<Order[]> {
-    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (error) console.error('Supabase getOrders error:', error.message);
     return (data || []).map(mappers.order);
   },
 
@@ -443,7 +449,8 @@ export const Database = {
 
   // 9. PAYMENTS
   async getPaymentReceipts(): Promise<PaymentReceipt[]> {
-    const { data } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
+    if (error) console.error('Supabase getPaymentReceipts error:', error.message);
     return (data || []).map(mappers.payment);
   },
 

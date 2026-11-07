@@ -47,6 +47,8 @@ export const BrandsView: React.FC = () => {
 
   useEffect(() => {
     reloadData();
+    window.addEventListener('open_create_brand', handleOpenCreate);
+    return () => window.removeEventListener('open_create_brand', handleOpenCreate);
   }, []);
 
   const handleOpenCreate = () => {
