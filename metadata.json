@@ -1,0 +1,6 @@
+{
+  "name": "Maison Royale — Painel Administrativo de Perfumaria",
+  "description": "Painel de controle administrativo completo para perfumaria de luxo com gestão de produtos, marcas, estoque, pedidos, clientes, Pix e relatórios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
