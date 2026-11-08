@@ -19,7 +19,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useToast } from '../common/Toast';
 
 export const AdminSecurityView: React.FC = () => {
-  const { currentAdmin, changePassword, registerAuthorizedAdmin, updateProfile } = useAuth();
+  const { currentAdmin, changePassword, registerAuthorizedAdmin, updateProfile, setTestingRole } = useAuth();
   const { success, error } = useToast();
 
   const [admins, setAdmins] = useState<AdminUser[]>([]);
@@ -277,6 +277,55 @@ export const AdminSecurityView: React.FC = () => {
               </div>
             </form>
           </div>
+
+          {/* RBAC Role Testing & Simulation Card */}
+          <div className="p-6 rounded-xl bg-zinc-900/80 border border-amber-500/30 space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <h3 className="font-serif text-sm font-semibold text-white">Simulador dos 4 Níveis de Acesso (RBAC)</h3>
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Alterne o perfil ativo para auditar em tempo real as restrições de tela e módulos da perfumaria:
+            </p>
+
+            <div className="space-y-1.5 pt-1">
+              {(
+                [
+                  { role: 'SUPER_ADMIN', label: '1. Super Administrador', desc: '14 Módulos (Acesso Irrestrito)' },
+                  { role: 'GERENTE', label: '2. Gerente de Perfumaria', desc: '10 Módulos (Catálogo, Vendas, Clientes)' },
+                  { role: 'ESTOQUISTA', label: '3. Controle de Estoque', desc: '6 Módulos (Estoque, Entrada/Saída, Pedidos)' },
+                  { role: 'CONSULTOR', label: '4. Consultor Olfativo VIP', desc: '6 Módulos (Atendimento, Agenda, Clientes)' },
+                ] as const
+              ).map((item) => {
+                const isActive = currentAdmin?.role === item.role;
+                return (
+                  <button
+                    key={item.role}
+                    type="button"
+                    onClick={() => {
+                      setTestingRole(item.role);
+                      success(`Perfil alternado para ${item.role}. Permissões atualizadas no menu!`);
+                    }}
+                    className={`w-full text-left p-2.5 rounded-lg border text-xs transition-all cursor-pointer flex items-center justify-between ${
+                      isActive
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 shadow-sm'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-semibold">{item.label}</div>
+                      <div className="text-[10px] text-zinc-500">{item.desc}</div>
+                    </div>
+                    {isActive && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-bold text-[9px] uppercase">
+                        Ativo
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Right 2 Columns: Authorized Admins & Audit Logs */}
@@ -294,14 +343,16 @@ export const AdminSecurityView: React.FC = () => {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsAddAdminOpen(true)}
-                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Novo Operador</span>
-              </button>
+              {currentAdmin?.role === 'SUPER_ADMIN' && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddAdminOpen(true)}
+                  className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Novo Operador</span>
+                </button>
+              )}
             </div>
 
             <div className="space-y-2.5">
@@ -341,7 +392,7 @@ export const AdminSecurityView: React.FC = () => {
                         </span>
                       </div>
 
-                      {!isCurrent && (
+                      {!isCurrent && currentAdmin?.role === 'SUPER_ADMIN' && (
                         <button
                           type="button"
                           onClick={() => setDeletingAdminId(adm.id)}

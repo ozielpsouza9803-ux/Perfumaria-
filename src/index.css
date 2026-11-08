@@ -47,3 +47,18 @@
 .gold-border-glow {
   box-shadow: 0 0 15px -3px rgba(212, 175, 55, 0.15);
 }
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 35s linear infinite;
+}

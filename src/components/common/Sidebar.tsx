@@ -18,11 +18,28 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  DollarSign,
+  Home,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { AdminRole } from '../../types';
 
 export type NavTab =
   | 'dashboard'
+  | 'cadastros'
+  | 'produtos'
+  | 'estoque'
+  | 'vendas'
+  | 'financeiro'
+  | 'marketing'
+  | 'agenda'
+  | 'relatorios'
+  | 'seguranca'
+  // Portal & Vitrine routes
+  | 'home'
+  | 'vitrine'
+  | 'cliente'
+  // Backward-compatible sub-routes
   | 'brands'
   | 'products'
   | 'stock'
@@ -55,10 +72,12 @@ interface SidebarProps {
 interface MenuItem {
   id: NavTab;
   label: string;
+  subLabel?: string;
   icon: React.ElementType;
   badge?: number;
   badgeType?: 'alert' | 'info';
-  category: 'VISÃO GERAL' | 'CATÁLOGO & ESTOQUE' | 'RELACIONAMENTO & VENDAS' | 'FINANCEIRO & SISTEMA';
+  category: 'VISÃO GERAL' | 'CADASTROS & CATÁLOGO' | 'OPERAÇÃO & VENDAS' | 'FINANÇAS & SEGURANÇA';
+  allowedRoles?: AdminRole[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -71,114 +90,111 @@ export const Sidebar: React.FC<SidebarProps> = ({
   badgeCounts,
 }) => {
   const { currentAdmin, logout } = useAuth();
+  const userRole: AdminRole = currentAdmin?.role || 'CONSULTOR';
+
+  const ALL_ROLES: AdminRole[] = ['SUPER_ADMIN', 'GERENTE', 'ESTOQUISTA', 'CONSULTOR'];
 
   const menuItems: MenuItem[] = [
-    // 1
+    // 1. Dashboard
     {
       id: 'dashboard',
-      label: '1. Dashboard Indicadores',
+      label: '1. Dashboard',
+      subLabel: 'Visão geral da perfumaria',
       icon: LayoutDashboard,
       category: 'VISÃO GERAL',
+      allowedRoles: ALL_ROLES,
     },
-    // 2
+    // 2. Cadastros
     {
-      id: 'brands',
-      label: '2. Gestão de Marcas',
-      icon: Award,
-      category: 'CATÁLOGO & ESTOQUE',
+      id: 'cadastros',
+      label: '2. Cadastros',
+      subLabel: 'Clientes, Fornecedores, Equipe',
+      icon: Users,
+      category: 'CADASTROS & CATÁLOGO',
+      allowedRoles: ALL_ROLES,
     },
-    // 3
+    // 3. Produtos
     {
-      id: 'products',
-      label: '3. Gestão de Produtos',
+      id: 'produtos',
+      label: '3. Produtos',
+      subLabel: 'Perfumes, Marcas, Fragrâncias',
       icon: Package,
-      category: 'CATÁLOGO & ESTOQUE',
+      category: 'CADASTROS & CATÁLOGO',
+      allowedRoles: ALL_ROLES,
     },
-    // 4
+    // 4. Estoque
     {
-      id: 'stock',
-      label: '4. Controle de Estoque',
+      id: 'estoque',
+      label: '4. Estoque',
+      subLabel: 'Posição, Entradas & Saídas',
       icon: Boxes,
       badge: badgeCounts.lowStock,
       badgeType: 'alert',
-      category: 'CATÁLOGO & ESTOQUE',
+      category: 'OPERAÇÃO & VENDAS',
+      allowedRoles: ALL_ROLES,
     },
-    // 5
+    // 5. Vendas
     {
-      id: 'movements',
-      label: '5. Entrada & Saída',
-      icon: ArrowLeftRight,
-      category: 'CATÁLOGO & ESTOQUE',
-    },
-    // 6
-    {
-      id: 'customers',
-      label: '6. Gestão de Clientes',
-      icon: Users,
-      category: 'RELACIONAMENTO & VENDAS',
-    },
-    // 7
-    {
-      id: 'appointments',
-      label: '7. Agenda de Clientes',
-      icon: CalendarCheck,
-      badge: badgeCounts.upcomingAppointments,
-      category: 'RELACIONAMENTO & VENDAS',
-    },
-    // 8
-    {
-      id: 'orders',
-      label: '8. Gestão de Pedidos',
+      id: 'vendas',
+      label: '5. Vendas',
+      subLabel: 'Nova Venda PDV & Pedidos',
       icon: ShoppingBag,
       badge: badgeCounts.pendingOrders,
       badgeType: 'info',
-      category: 'RELACIONAMENTO & VENDAS',
+      category: 'OPERAÇÃO & VENDAS',
+      allowedRoles: ALL_ROLES,
     },
-    // 9
+    // 6. Financeiro
     {
-      id: 'payments',
-      label: '9. Pagamentos & Recibos',
-      icon: Receipt,
+      id: 'financeiro',
+      label: '6. Financeiro',
+      subLabel: 'Fluxo Caixa, Pagar & Receber',
+      icon: DollarSign,
       badge: badgeCounts.pendingPayments,
       badgeType: 'alert',
-      category: 'FINANCEIRO & SISTEMA',
+      category: 'FINANÇAS & SEGURANÇA',
+      allowedRoles: ALL_ROLES,
     },
-    // 10
+    // 7. Marketing
     {
-      id: 'pix',
-      label: '10. Configuração do Pix',
-      icon: QrCode,
-      category: 'FINANCEIRO & SISTEMA',
+      id: 'marketing',
+      label: '7. Marketing',
+      subLabel: 'Cupons, Promoções & VIP',
+      icon: Sparkles,
+      category: 'OPERAÇÃO & VENDAS',
+      allowedRoles: ALL_ROLES,
     },
-    // 11
+    // 8. Agenda
     {
-      id: 'coupons',
-      label: '11. Cupons & Promoções',
-      icon: Tag,
-      category: 'FINANCEIRO & SISTEMA',
+      id: 'agenda',
+      label: '8. Agenda',
+      subLabel: 'Consultorias Olfativas VIP',
+      icon: CalendarCheck,
+      badge: badgeCounts.upcomingAppointments,
+      category: 'OPERAÇÃO & VENDAS',
+      allowedRoles: ALL_ROLES,
     },
-    // 12
+    // 9. Relatórios
     {
-      id: 'reports',
-      label: '12. Relatórios de Vendas',
+      id: 'relatorios',
+      label: '9. Relatórios',
+      subLabel: 'Vendas, Estoque, DRE',
       icon: BarChart3,
-      category: 'FINANCEIRO & SISTEMA',
+      category: 'FINANÇAS & SEGURANÇA',
+      allowedRoles: ALL_ROLES,
     },
-    // 13
+    // 10. Perfil e Segurança
     {
-      id: 'settings',
-      label: '13. Configurações Gerais',
-      icon: Sliders,
-      category: 'FINANCEIRO & SISTEMA',
-    },
-    // 14
-    {
-      id: 'security',
-      label: '14. Perfil & Segurança',
+      id: 'seguranca',
+      label: '10. Perfil & Segurança',
+      subLabel: 'Meu Perfil, 4 Níveis RBAC',
       icon: ShieldAlert,
-      category: 'FINANCEIRO & SISTEMA',
+      category: 'FINANÇAS & SEGURANÇA',
+      allowedRoles: ALL_ROLES,
     },
   ];
+
+  const visibleMenuItems = menuItems;
 
   const handleItemClick = (id: NavTab) => {
     onSelectTab(id);
@@ -232,7 +248,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Navigation list */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          {menuItems.map((item) => {
+          {visibleMenuItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
             return (
@@ -281,8 +297,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </div>
 
-        {/* User profile & Logout footer */}
-        <div className="p-3 border-t border-zinc-800 bg-zinc-950/60">
+        {/* Return to Public Home & User profile */}
+        <div className="p-3 border-t border-zinc-800 bg-zinc-950/60 space-y-2">
+          {currentTab !== 'home' && (
+            <button
+              type="button"
+              onClick={() => onSelectTab('home')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900/90 hover:bg-zinc-800 border border-amber-500/30 text-amber-300 hover:text-amber-200 transition-all cursor-pointer ${
+                isCollapsed ? 'justify-center' : ''
+              }`}
+              title="Voltar à Tela Inicial Pública sem encerrar a sessão"
+            >
+              <Home className="w-4 h-4 text-amber-400 shrink-0" />
+              {!isCollapsed && <span className="truncate">Voltar ao Início</span>}
+            </button>
+          )}
+
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-300 text-black flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">

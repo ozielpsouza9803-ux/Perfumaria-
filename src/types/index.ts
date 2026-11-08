@@ -218,3 +218,65 @@ export interface AuditLog {
   details: string;
   timestamp: string;
 }
+
+export interface Supplier {
+  id: string;
+  companyName: string;
+  tradeName: string;
+  cnpjOrVat: string;
+  category: 'Essências & Óleos Nobres' | 'Vidraria & Frascos' | 'Válvulas & Atomizadores' | 'Embalagens & Estojos' | 'Insumos de Laboratório';
+  country: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  website?: string;
+  status: 'Ativo' | 'Em Homologação' | 'Inativo';
+  paymentTerms: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface BillPayable {
+  id: string;
+  description: string;
+  supplierId?: string;
+  supplierName: string;
+  category: 'Importação de Fragrâncias' | 'Insumos de Grasse' | 'Frascos & Vidraria' | 'Logística Internacional' | 'Boutique & Operação' | 'Marketing';
+  amount: number;
+  dueDate: string;
+  paymentDate?: string;
+  status: 'Pendente' | 'Pago' | 'Atrasado';
+  documentNumber?: string;
+  paymentMethod?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface BillReceivable {
+  id: string;
+  description: string;
+  customerId?: string;
+  customerName: string;
+  orderId?: string;
+  orderNumber?: string;
+  amount: number;
+  dueDate: string;
+  receivedDate?: string;
+  status: 'Pendente' | 'Recebido' | 'Atrasado';
+  paymentMethod: PaymentMethod;
+  notes?: string;
+  createdAt: string;
+}
+
+export type AdminModule =
+  | 'dashboard'
+  | 'cadastros'
+  | 'produtos'
+  | 'estoque'
+  | 'vendas'
+  | 'financeiro'
+  | 'marketing'
+  | 'agenda'
+  | 'relatorios'
+  | 'seguranca';
+

@@ -7,8 +7,29 @@ import { TopBar } from './components/common/TopBar';
 import { QuickSearch } from './components/common/QuickSearch';
 import { Database } from './services/database';
 
-// 14 Module Views
+// 10 Official Administrative Modules & Views
 import { DashboardView } from './components/views/DashboardView';
+import { CadastrosView } from './components/views/CadastrosView';
+import { ProdutosModuloView } from './components/views/ProdutosModuloView';
+import { EstoqueModuloView } from './components/views/EstoqueModuloView';
+import { VendasModuloView } from './components/views/VendasModuloView';
+import { FinanceiroModuloView } from './components/views/FinanceiroModuloView';
+import { MarketingModuloView } from './components/views/MarketingModuloView';
+import { AgendaModuloView } from './components/views/AgendaModuloView';
+import { RelatoriosModuloView } from './components/views/RelatoriosModuloView';
+import { AdminSecurityView } from './components/views/AdminSecurityView';
+
+// Public Vitrine, Customer Portal & Navigation Components
+import { HomeView } from './components/views/HomeView';
+import { VitrineView } from './components/views/VitrineView';
+import { CustomerPortalView } from './components/views/CustomerPortalView';
+import { BottomNav } from './components/common/BottomNav';
+import { ConciergeChatModal } from './components/common/ConciergeChatModal';
+
+import { CartProvider } from './context/CartContext';
+import { CartDrawer } from './components/common/CartDrawer';
+
+// Direct Sub-View Aliases for QuickSearch and Deep-linking
 import { BrandsView } from './components/views/BrandsView';
 import { ProductsView } from './components/views/ProductsView';
 import { StockView } from './components/views/StockView';
@@ -21,14 +42,14 @@ import { PixConfigView } from './components/views/PixConfigView';
 import { CouponsView } from './components/views/CouponsView';
 import { SalesReportsView } from './components/views/SalesReportsView';
 import { GeneralSettingsView } from './components/views/GeneralSettingsView';
-import { AdminSecurityView } from './components/views/AdminSecurityView';
 
 const AdminLayout: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const { currentAdmin, isAuthenticated, isLoading } = useAuth();
+  const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Badge notification counts
   const [badgeCounts, setBadgeCounts] = useState({
@@ -38,26 +59,77 @@ const AdminLayout: React.FC = () => {
     upcomingAppointments: 0,
   });
 
+  const userRole = currentAdmin?.role || 'CONSULTOR';
+
+  // Guard navigation tabs based on user role permissions
+  useEffect(() => {
+    if (!isAuthenticated || !currentAdmin) return;
+    const ALL_MODULE_TABS: NavTab[] = [
+      'home',
+      'vitrine',
+      'cliente',
+      'dashboard',
+      'cadastros',
+      'produtos',
+      'estoque',
+      'vendas',
+      'financeiro',
+      'marketing',
+      'agenda',
+      'relatorios',
+      'seguranca',
+      'brands',
+      'products',
+      'stock',
+      'movements',
+      'customers',
+      'appointments',
+      'orders',
+      'payments',
+      'pix',
+      'coupons',
+      'reports',
+      'settings',
+      'security',
+    ];
+    const rolePermissions: Record<string, NavTab[]> = {
+      SUPER_ADMIN: ALL_MODULE_TABS,
+      GERENTE: ALL_MODULE_TABS,
+      ESTOQUISTA: ALL_MODULE_TABS,
+      CONSULTOR: ALL_MODULE_TABS,
+    };
+    const allowed = rolePermissions[userRole] || ALL_MODULE_TABS;
+    if (!allowed.includes(currentTab)) {
+      setCurrentTab('dashboard');
+    }
+  }, [currentTab, userRole, isAuthenticated, currentAdmin]);
+
   const updateBadges = async () => {
-    const products = await Database.getProducts();
-    const orders = await Database.getOrders();
-    const payments = await Database.getPaymentReceipts();
-    const appointments = await Database.getAppointments();
+    if (!isAuthenticated) return;
+    try {
+      const products = await Database.getProducts();
+      const orders = await Database.getOrders();
+      const payments = await Database.getPaymentReceipts();
+      const appointments = await Database.getAppointments();
 
-    const lowStock = products.filter((p) => p.stockQuantity <= p.minStockAlert).length;
-    const pendingOrders = orders.filter((o) => o.fulfillmentStatus === 'Em Separação').length;
-    const pendingPayments = payments.filter((p) => p.status === 'Aguardando Análise').length;
-    const upcomingAppointments = appointments.filter((a) => a.status === 'Agendado').length;
+      const lowStock = products.filter((p) => p.stockQuantity <= p.minStockAlert).length;
+      const pendingOrders = orders.filter((o) => o.fulfillmentStatus === 'Em Separação').length;
+      const pendingPayments = payments.filter((p) => p.status === 'Aguardando Análise').length;
+      const upcomingAppointments = appointments.filter((a) => a.status === 'Agendado').length;
 
-    setBadgeCounts({
-      lowStock,
-      pendingOrders,
-      pendingPayments,
-      upcomingAppointments,
-    });
+      setBadgeCounts({
+        lowStock,
+        pendingOrders,
+        pendingPayments,
+        upcomingAppointments,
+      });
+    } catch (err) {
+      console.warn('Badges update warning:', err);
+    }
   };
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     updateBadges();
     const handleDbChange = () => updateBadges();
     const handleOpenSearch = () => setIsQuickSearchOpen(true);
@@ -69,7 +141,7 @@ const AdminLayout: React.FC = () => {
       window.removeEventListener('mr_database_change', handleDbChange);
       window.removeEventListener('open_quick_search', handleOpenSearch);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const [loadingTimeout, setLoadingTimeout] = useState(false);
 
@@ -113,10 +185,8 @@ const AdminLayout: React.FC = () => {
     );
   }
 
-  // Not authenticated: show login & admin registration system
-  if (!isAuthenticated) {
-    return <AuthScreen />;
-  }
+  // Public tabs accessible to everyone (visitors & clients)
+  const isPublicTab = currentTab === 'home' || currentTab === 'vitrine' || currentTab === 'cliente';
 
   // Contextual Quick Action button for TopBar
   let quickActionLabel: string | undefined;
@@ -140,35 +210,79 @@ const AdminLayout: React.FC = () => {
     quickActionLabel = 'Novo Cliente';
   }
 
+  // Admin Module Access Guard
+  const isAdminModule = !isPublicTab;
+
+  if (!isAuthenticated && isAdminModule) {
+    return <AuthScreen onBackToStore={() => setCurrentTab('home')} />;
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col antialiased">
       <div className="flex-1 flex overflow-hidden">
-        {/* Responsive luxury sidebar */}
-        <Sidebar
-          currentTab={currentTab}
-          onSelectTab={setCurrentTab}
-          isOpenMobile={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          badgeCounts={badgeCounts}
-        />
+        {/* Responsive luxury sidebar — ONLY for Admin modules */}
+        {isAdminModule && isAuthenticated && (
+          <Sidebar
+            currentTab={currentTab}
+            onSelectTab={setCurrentTab}
+            isOpenMobile={isMobileSidebarOpen}
+            onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            badgeCounts={badgeCounts}
+          />
+        )}
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          {/* Top Bar with 3-zone contract */}
-          <TopBar
-            currentTab={currentTab}
-            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-            onOpenQuickSearch={() => setIsQuickSearchOpen(true)}
-            onQuickAction={onQuickAction}
-            quickActionLabel={quickActionLabel}
-            lowStockCount={badgeCounts.lowStock}
-          />
+          {/* Top Bar with 3-zone contract — ONLY for Admin modules */}
+          {isAdminModule && isAuthenticated && (
+            <TopBar
+              currentTab={currentTab}
+              onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+              onOpenQuickSearch={() => setIsQuickSearchOpen(true)}
+              onQuickAction={onQuickAction}
+              quickActionLabel={quickActionLabel}
+              lowStockCount={badgeCounts.lowStock}
+              onNavigate={setCurrentTab}
+            />
+          )}
 
           {/* Viewport Content */}
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 sm:pb-8">
+            {/* Public Home, Vitrine & Customer Portal Views */}
+            {currentTab === 'home' && (
+              <HomeView
+                onNavigate={setCurrentTab}
+                onOpenChat={() => setIsChatOpen(true)}
+              />
+            )}
+            {currentTab === 'vitrine' && (
+              <VitrineView
+                onNavigate={setCurrentTab}
+                onOpenChat={() => setIsChatOpen(true)}
+              />
+            )}
+            {currentTab === 'cliente' && (
+              <CustomerPortalView
+                onNavigate={setCurrentTab}
+                onOpenChat={() => setIsChatOpen(true)}
+              />
+            )}
+
+            {/* 10 Official Modules */}
             {currentTab === 'dashboard' && <DashboardView onNavigate={setCurrentTab} />}
+            {currentTab === 'cadastros' && <CadastrosView />}
+            {currentTab === 'produtos' && <ProdutosModuloView />}
+            {currentTab === 'estoque' && <EstoqueModuloView onNavigate={setCurrentTab} />}
+            {currentTab === 'vendas' && <VendasModuloView />}
+            {currentTab === 'financeiro' && <FinanceiroModuloView />}
+            {currentTab === 'marketing' && <MarketingModuloView />}
+            {currentTab === 'agenda' && <AgendaModuloView />}
+            {currentTab === 'relatorios' && <RelatoriosModuloView />}
+            {(currentTab === 'seguranca' || currentTab === 'security') && <AdminSecurityView />}
+
+            {/* Direct Navigation Aliases */}
             {currentTab === 'brands' && <BrandsView />}
             {currentTab === 'products' && <ProductsView />}
             {currentTab === 'stock' && <StockView onNavigate={setCurrentTab} />}
@@ -181,10 +295,30 @@ const AdminLayout: React.FC = () => {
             {currentTab === 'coupons' && <CouponsView />}
             {currentTab === 'reports' && <SalesReportsView />}
             {currentTab === 'settings' && <GeneralSettingsView />}
-            {currentTab === 'security' && <AdminSecurityView />}
           </main>
         </div>
       </div>
+
+      {/* Fixed Bottom Navigation Bar — EXCLUSIVELY on Home screen */}
+      {currentTab === 'home' && (
+        <BottomNav
+          currentTab={currentTab}
+          onSelectTab={setCurrentTab}
+          onOpenChat={() => setIsChatOpen(!isChatOpen)}
+        />
+      )}
+
+      {/* Floating Concierge Chat Assistant Drawer */}
+      <ConciergeChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        onToggleOpen={() => setIsChatOpen(!isChatOpen)}
+        onNavigate={setCurrentTab}
+        currentTab={currentTab}
+      />
+
+      {/* Global Shopping Cart Drawer */}
+      <CartDrawer onOrderSuccess={() => setCurrentTab('cliente')} />
 
       {/* Global Command Palette / Quick Search (Cmd+K) */}
       <QuickSearch
@@ -200,7 +334,9 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <AdminLayout />
+        <CartProvider>
+          <AdminLayout />
+        </CartProvider>
       </ToastProvider>
     </AuthProvider>
   );

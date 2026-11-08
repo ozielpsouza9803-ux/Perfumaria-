@@ -1,6 +1,7 @@
 import React from 'react';
-import { Menu, Search, Plus, Bell, Shield, ExternalLink } from 'lucide-react';
+import { Menu, Search, Plus, Bell, Shield, ExternalLink, Lock, UserCheck, Home, ArrowLeft } from 'lucide-react';
 import { NavTab } from './Sidebar';
+import { useAuth } from '../../context/AuthContext';
 
 interface TopBarProps {
   currentTab: NavTab;
@@ -9,10 +10,24 @@ interface TopBarProps {
   onQuickAction?: () => void;
   quickActionLabel?: string;
   lowStockCount: number;
+  onNavigate?: (tab: NavTab) => void;
 }
 
 const TAB_TITLES: Record<NavTab, { title: string; category: string }> = {
-  dashboard: { title: 'Dashboard & Indicadores', category: 'Visão Geral' },
+  dashboard: { title: '1. Dashboard Geral', category: 'Visão Geral' },
+  cadastros: { title: '2. Cadastros Centrais', category: 'Cadastros' },
+  produtos: { title: '3. Fragrâncias & Marcas', category: 'Catálogo' },
+  estoque: { title: '4. Estoque & Movimentações', category: 'Estoque' },
+  vendas: { title: '5. Vendas & Pedidos', category: 'Vendas' },
+  financeiro: { title: '6. Finanças & Tesouraria', category: 'Financeiro' },
+  marketing: { title: '7. Marketing & VIP', category: 'Marketing' },
+  agenda: { title: '8. Agenda & Consultorias', category: 'Atendimento' },
+  relatorios: { title: '9. Relatórios Analíticos', category: 'Inteligência' },
+  seguranca: { title: '10. Perfil & Segurança', category: 'Segurança' },
+  home: { title: 'Maison Royale — Vitrine Principal', category: 'Ateliê' },
+  vitrine: { title: 'Vitrine do Acervo Olfativo', category: 'Catálogo' },
+  cliente: { title: 'Portal VIP do Cliente', category: 'Relacionamento' },
+  // Backward compatibility aliases
   brands: { title: 'Gestão de Marcas', category: 'Catálogo' },
   products: { title: 'Cadastro e Gestão de Produtos', category: 'Catálogo' },
   stock: { title: 'Controle de Estoque & Alertas', category: 'Estoque' },
@@ -35,7 +50,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   onQuickAction,
   quickActionLabel,
   lowStockCount,
+  onNavigate,
 }) => {
+  const { isAuthenticated, currentAdmin } = useAuth();
   const currentInfo = TAB_TITLES[currentTab] || { title: 'Painel ADM', category: 'Geral' };
 
   return (
@@ -85,6 +102,25 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Zone 3: Primary Action / Quick Action */}
       <div className="flex items-center gap-2.5 shrink-0">
+        {onNavigate && currentTab !== 'home' && (
+          <button
+            type="button"
+            onClick={() => onNavigate('home')}
+            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
+            title="Retornar à Tela Inicial Pública mantendo a sessão"
+          >
+            <Home className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Voltar à Tela Inicial</span>
+          </button>
+        )}
+
+        {isAuthenticated && currentAdmin && (
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 font-mono">
+            <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span>{currentAdmin.role}</span>
+          </div>
+        )}
+
         {lowStockCount > 0 && (
           <div
             title={`${lowStockCount} perfume(s) com estoque crítico`}

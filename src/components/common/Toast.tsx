@@ -3,14 +3,15 @@ import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export interface ToastItem {
   id: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
   message: string;
 }
 
 interface ToastContextType {
-  toast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  toast: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
   success: (message: string) => void;
   error: (message: string) => void;
+  warning: (message: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -22,7 +23,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const toast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const toast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const id = 'toast_' + Date.now() + Math.random().toString(36).substring(2, 6);
     setToasts((prev) => [...prev, { id, type, message }]);
     setTimeout(() => {
@@ -32,9 +33,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const success = useCallback((msg: string) => toast(msg, 'success'), [toast]);
   const error = useCallback((msg: string) => toast(msg, 'error'), [toast]);
+  const warning = useCallback((msg: string) => toast(msg, 'warning'), [toast]);
 
   return (
-    <ToastContext.Provider value={{ toast, success, error }}>
+    <ToastContext.Provider value={{ toast, success, error, warning }}>
       {children}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
         {toasts.map((t) => (

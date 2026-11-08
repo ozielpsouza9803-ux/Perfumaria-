@@ -11,11 +11,14 @@ import {
   Bell,
   RefreshCw,
   AlertTriangle,
+  Sparkles,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Database } from '../../services/database';
 import { GeneralSettings } from '../../types';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useToast } from '../common/Toast';
+import { ImageUpload } from '../common/ImageUpload';
 
 export const GeneralSettingsView: React.FC = () => {
   const { success, error } = useToast();
@@ -24,6 +27,9 @@ export const GeneralSettingsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
   const [pendingRestoreJson, setPendingRestoreJson] = useState<string | null>(null);
+  const [heroBannerUrl, setHeroBannerUrl] = useState<string>(
+    'https://images.unsplash.com/photo-1547887537-6158d64c35b3?q=80&w=1600&auto=format&fit=crop'
+  );
 
   const loadSettings = async () => {
     setLoading(true);
@@ -249,8 +255,32 @@ export const GeneralSettingsView: React.FC = () => {
           </form>
         </div>
 
-        {/* Right 1 Col: Backup & Restore */}
+        {/* Right 1 Col: Showcase Media Uploads & Backup */}
         <div className="space-y-6">
+          {/* Banner & Media Upload Management */}
+          <div className="p-6 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
+              <ImageIcon className="w-4 h-4 text-amber-400" />
+              <h3 className="font-serif text-sm font-semibold text-white">Banner & Mídia da Vitrine Principal</h3>
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Faça upload ou selecione fotografias para o banner principal da tela inicial, logotipos de marcas, fotos de frascos e imagens de perfil dos clientes/operadores.
+            </p>
+
+            <div className="pt-2">
+              <ImageUpload
+                value={heroBannerUrl}
+                onChange={(newUrl) => {
+                  setHeroBannerUrl(newUrl);
+                  success('Banner da Vitrine atualizado com sucesso!');
+                }}
+                label="Banner Hero Principal (Tela Inicial)"
+                hint="Envie uma imagem de alta definição (16:9 ou ultrawide) da sua galeria ou estúdio."
+              />
+            </div>
+          </div>
+
           <div className="p-6 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
               <DatabaseIcon className="w-4 h-4 text-amber-400" />

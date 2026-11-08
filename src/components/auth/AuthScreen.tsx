@@ -1,18 +1,24 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../common/Toast';
-import { Lock, Mail, KeyRound, ShieldCheck, UserPlus, ArrowRight, ArrowLeft, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Lock, Mail, KeyRound, ShieldCheck, UserPlus, ArrowRight, ArrowLeft, Eye, EyeOff, Sparkles, Send } from 'lucide-react';
 import { AdminRole } from '../../types';
+import { supabase } from '../../lib/supabase';
 
-type AuthMode = 'LOGIN' | 'RECOVERY_REQUEST' | 'RECOVERY_RESET' | 'REGISTER_ADMIN';
+type AuthMode = 'LOGIN' | 'RECOVERY_REQUEST' | 'RECOVERY_RESET' | 'REGISTER_ADMIN' | 'REGISTER_CUSTOMER';
 
-export const AuthScreen: React.FC = () => {
-  const { login, requestPasswordRecovery, confirmPasswordReset, registerAuthorizedAdmin } = useAuth();
+interface AuthScreenProps {
+  onBackToStore?: () => void;
+}
+
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore }) => {
+  const { login, requestPasswordRecovery, confirmPasswordReset, registerAuthorizedAdmin, registerCustomer } = useAuth();
   const { success, error } = useToast();
 
   const [mode, setMode] = useState<AuthMode>('LOGIN');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
 
   // Form states
   const [email, setEmail] = useState('');
@@ -48,6 +54,27 @@ export const AuthScreen: React.FC = () => {
       success(res.message);
     } else {
       error(res.message);
+      if (res.message.includes('não confirmado') || res.message.includes('confirmed')) {
+        setNeedsConfirmation(true);
+      }
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      error('Informe o e-mail cadastrado para reenviar.');
+      return;
+    }
+    setLoading(true);
+    const { error: resendErr } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+    });
+    setLoading(false);
+    if (!resendErr) {
+      success('Link de confirmação enviado para ' + email + '! Verifique seu e-mail.');
+    } else {
+      error(resendErr.message);
     }
   };
 
@@ -123,6 +150,25 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
+  const handleCustomerRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regName.trim() || !regEmail.trim() || !regPassword.trim()) {
+      error('Preencha os campos obrigatórios.');
+      return;
+    }
+    setLoading(true);
+    const res = await registerCustomer(regName.trim(), regEmail.trim(), regPhone.trim(), regPassword.trim());
+    setLoading(false);
+    if (res.success) {
+      success(res.message);
+      setEmail(regEmail);
+      setPassword(regPassword);
+      setMode('LOGIN');
+    } else {
+      error(res.message);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black relative overflow-hidden">
       {/* Subtle gold ambient glow */}
@@ -145,6 +191,19 @@ export const AuthScreen: React.FC = () => {
             <span className="text-[10px] text-zinc-500 tracking-wider uppercase">Ambiente Seguro</span>
             <span className="h-px w-10 bg-amber-500/30"></span>
           </div>
+
+          {onBackToStore && (
+            <div className="mt-3 flex justify-center">
+              <button
+                type="button"
+                onClick={onBackToStore}
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 hover:border-amber-500/40 text-xs text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Voltar para a Loja Pública</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Card Box */}
@@ -212,6 +271,23 @@ export const AuthScreen: React.FC = () => {
                 </div>
               </div>
 
+              {needsConfirmation && (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-2">
+                  <p className="leading-relaxed">
+                    A conta de administrador requer confirmação de e-mail pelas diretrizes do Supabase. Verifique a caixa de entrada de <span className="font-semibold">{email}</span>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={loading}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500 text-black font-semibold text-[11px] rounded hover:bg-amber-400 transition-colors cursor-pointer"
+                  >
+                    <Send className="w-3 h-3" />
+                    <span>Reenviar Link de Confirmação</span>
+                  </button>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
@@ -221,14 +297,22 @@ export const AuthScreen: React.FC = () => {
                 <ArrowRight className="w-4 h-4" />
               </button>
 
-              <div className="pt-3 border-t border-zinc-800 text-center">
+              <div className="pt-3 border-t border-zinc-800 flex flex-col gap-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => setMode('REGISTER_CUSTOMER')}
+                  className="text-xs text-amber-400 hover:text-amber-300 font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Criar Conta de Cliente VIP
+                </button>
                 <button
                   type="button"
                   onClick={() => setMode('REGISTER_ADMIN')}
-                  className="text-xs text-zinc-400 hover:text-amber-300 inline-flex items-center gap-1.5 transition-colors"
+                  className="text-[11px] text-zinc-500 hover:text-zinc-300 inline-flex items-center justify-center gap-1.5 transition-colors"
                 >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Cadastrar Administrador Autorizado
+                  <ShieldCheck className="w-3 h-3 text-amber-500/70" />
+                  Cadastrar Operador / ADM Autorizado
                 </button>
               </div>
             </form>
@@ -443,7 +527,80 @@ export const AuthScreen: React.FC = () => {
                 disabled={loading}
                 className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs tracking-wider uppercase rounded-lg transition-all mt-2"
               >
-                {loading ? 'Cadastrando...' : 'Finalizar Cadastro'}
+                {loading ? 'Cadastrando...' : 'Finalizar Cadastro ADM'}
+              </button>
+            </form>
+          )}
+
+          {/* MODE 5: REGISTER CUSTOMER */}
+          {mode === 'REGISTER_CUSTOMER' && (
+            <form onSubmit={handleCustomerRegister} className="space-y-3.5">
+              <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setMode('LOGIN')}
+                  className="p-1 text-zinc-400 hover:text-white rounded"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <h2 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider">
+                  Cadastro de Cliente VIP
+                </h2>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-400 mb-1">Nome Completo</label>
+                <input
+                  type="text"
+                  required
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="Seu nome completo"
+                  className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-400 mb-1">E-mail</label>
+                <input
+                  type="email"
+                  required
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="cliente@exemplo.com"
+                  className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-400 mb-1">Telefone / WhatsApp</label>
+                <input
+                  type="text"
+                  value={regPhone}
+                  onChange={(e) => setRegPhone(e.target.value)}
+                  placeholder="(11) 99999-8888"
+                  className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-400 mb-1">Senha de Acesso</label>
+                <input
+                  type="password"
+                  required
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs tracking-wider uppercase rounded-lg transition-all mt-2 cursor-pointer disabled:opacity-50"
+              >
+                {loading ? 'Criando Conta...' : 'Criar Conta de Cliente VIP'}
               </button>
             </form>
           )}
