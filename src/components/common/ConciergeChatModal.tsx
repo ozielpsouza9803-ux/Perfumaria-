@@ -14,6 +14,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../common/Toast';
 
 import { NavTab } from './Sidebar';
+import { VoiceControl } from './VoiceControl';
+import { ProfilePhotoManager } from './ProfilePhotoManager';
 
 interface ConciergeChatModalProps {
   isOpen: boolean;
@@ -55,7 +57,12 @@ export const ConciergeChatModal: React.FC<ConciergeChatModalProps> = ({
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState(() => localStorage.getItem('mr_ai_photo_Concierge') || '');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('mr_ai_photo_Concierge', profilePhoto);
+  }, [profilePhoto]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -108,6 +115,11 @@ export const ConciergeChatModal: React.FC<ConciergeChatModalProps> = ({
       };
 
       setMessages((prev) => [...prev, conciergeMsg]);
+      
+      // Text-to-Speech
+      const utterance = new SpeechSynthesisUtterance(replyText);
+      utterance.lang = 'pt-BR';
+      window.speechSynthesis.speak(utterance);
     }, 600);
   };
 
@@ -225,11 +237,12 @@ export const ConciergeChatModal: React.FC<ConciergeChatModalProps> = ({
             }}
             className="p-3 bg-zinc-900/90 border-t border-zinc-800 flex items-center gap-2"
           >
+            <VoiceControl onTranscript={(text) => setInputMessage(text)} />
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Digite sua mensagem para o concierge..."
+              placeholder="Digite ou fale sua mensagem..."
               className="flex-1 px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-400"
             />
             <button

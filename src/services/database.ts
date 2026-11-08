@@ -441,20 +441,80 @@ export const Database = {
     return { success: true, message: 'Acesso revogado com sucesso!' };
   },
 
-  // 2. BRANDS
-  async getBrands(): Promise<Brand[]> {
-    const { data, error } = await supabase.from('brands').select('*').order('name');
-    if (!error && data && data.length > 0) {
-      return data.map(mappers.brand);
+  // In-memory runtime cache for instantaneous renders
+  _productsCache: null as Product[] | null,
+  _brandsCache: null as Brand[] | null,
+  _productsFetchPromise: null as Promise<Product[]> | null,
+  _brandsFetchPromise: null as Promise<Brand[]> | null,
+
+  getCachedProductsSync(): Product[] {
+    if (this._productsCache && this._productsCache.length > 0) {
+      return this._productsCache;
+    }
+    const local = localStorage.getItem('mr_products_cache');
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this._productsCache = parsed;
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    this._productsCache = this.INITIAL_PRODUCTS;
+    return this.INITIAL_PRODUCTS;
+  },
+
+  getCachedBrandsSync(): Brand[] {
+    if (this._brandsCache && this._brandsCache.length > 0) {
+      return this._brandsCache;
     }
     const local = localStorage.getItem('mr_brands_cache');
     if (local) {
       try {
-        return JSON.parse(local);
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this._brandsCache = parsed;
+          return parsed;
+        }
       } catch (e) {}
     }
-    localStorage.setItem('mr_brands_cache', JSON.stringify(this.INITIAL_BRANDS));
+    this._brandsCache = this.INITIAL_BRANDS;
     return this.INITIAL_BRANDS;
+  },
+
+  // 2. BRANDS
+  async getBrands(forceRefresh = false): Promise<Brand[]> {
+    if (!forceRefresh && this._brandsCache && this._brandsCache.length > 0) {
+      return this._brandsCache;
+    }
+
+    if (this._brandsFetchPromise) {
+      return this._brandsFetchPromise;
+    }
+
+    this._brandsFetchPromise = (async () => {
+      try {
+        const queryPromise = supabase.from('brands').select('*').order('name');
+        const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2000)
+        );
+        const result: any = await Promise.race([queryPromise, timeoutPromise]);
+        if (!result.error && result.data && result.data.length > 0) {
+          const mapped = result.data.map(mappers.brand);
+          this._brandsCache = mapped;
+          localStorage.setItem('mr_brands_cache', JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (e) {
+        console.warn('Supabase getBrands query warning:', e);
+      } finally {
+        this._brandsFetchPromise = null;
+      }
+      return this.getCachedBrandsSync();
+    })();
+
+    return this._brandsFetchPromise;
   },
 
   async saveBrand(brand: Brand): Promise<{ success: boolean; message: string }> {
@@ -471,10 +531,11 @@ export const Database = {
 
     const { error } = await supabase.from('brands').upsert(payload);
 
-    // Sync local persistent storage
+    // Sync local persistent storage & cache
     const existing = await this.getBrands();
     const exists = existing.some(b => b.id === brandId);
     const updated = exists ? existing.map(b => b.id === brandId ? cleanBrand : b) : [cleanBrand, ...existing];
+    this._brandsCache = updated;
     localStorage.setItem('mr_brands_cache', JSON.stringify(updated));
 
     window.dispatchEvent(new CustomEvent('mr_database_change'));
@@ -492,6 +553,7 @@ export const Database = {
     const { error } = await supabase.from('brands').delete().eq('id', id);
     const existing = await this.getBrands();
     const filtered = existing.filter(b => b.id !== id);
+    this._brandsCache = filtered;
     localStorage.setItem('mr_brands_cache', JSON.stringify(filtered));
 
     window.dispatchEvent(new CustomEvent('mr_database_change'));
@@ -499,19 +561,37 @@ export const Database = {
   },
 
   // 3. PRODUCTS
-  async getProducts(): Promise<Product[]> {
-    const { data, error } = await supabase.from('products').select('*, brands(name)').order('name');
-    if (!error && data && data.length > 0) {
-      return data.map(mappers.product);
+  async getProducts(forceRefresh = false): Promise<Product[]> {
+    if (!forceRefresh && this._productsCache && this._productsCache.length > 0) {
+      return this._productsCache;
     }
-    const local = localStorage.getItem('mr_products_cache');
-    if (local) {
+
+    if (this._productsFetchPromise) {
+      return this._productsFetchPromise;
+    }
+
+    this._productsFetchPromise = (async () => {
       try {
-        return JSON.parse(local);
-      } catch (e) {}
-    }
-    localStorage.setItem('mr_products_cache', JSON.stringify(this.INITIAL_PRODUCTS));
-    return this.INITIAL_PRODUCTS;
+        const queryPromise = supabase.from('products').select('*, brands(name)').order('name');
+        const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2000)
+        );
+        const result: any = await Promise.race([queryPromise, timeoutPromise]);
+        if (!result.error && result.data && result.data.length > 0) {
+          const mapped = result.data.map(mappers.product);
+          this._productsCache = mapped;
+          localStorage.setItem('mr_products_cache', JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (e) {
+        console.warn('Supabase getProducts query warning:', e);
+      } finally {
+        this._productsFetchPromise = null;
+      }
+      return this.getCachedProductsSync();
+    })();
+
+    return this._productsFetchPromise;
   },
 
   async saveProduct(product: Product): Promise<{ success: boolean; message: string }> {
@@ -554,10 +634,11 @@ export const Database = {
 
     const { error } = await supabase.from('products').upsert(payload);
 
-    // Sync local persistent storage
+    // Sync local persistent storage & cache
     const existing = await this.getProducts();
     const exists = existing.some(p => p.id === prodId);
     const updated = exists ? existing.map(p => p.id === prodId ? cleanProduct : p) : [cleanProduct, ...existing];
+    this._productsCache = updated;
     localStorage.setItem('mr_products_cache', JSON.stringify(updated));
 
     window.dispatchEvent(new CustomEvent('mr_database_change'));
@@ -568,6 +649,7 @@ export const Database = {
     const { error } = await supabase.from('products').delete().eq('id', id);
     const existing = await this.getProducts();
     const filtered = existing.filter(p => p.id !== id);
+    this._productsCache = filtered;
     localStorage.setItem('mr_products_cache', JSON.stringify(filtered));
 
     window.dispatchEvent(new CustomEvent('mr_database_change'));

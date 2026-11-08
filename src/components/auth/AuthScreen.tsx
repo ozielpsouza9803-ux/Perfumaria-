@@ -9,9 +9,10 @@ type AuthMode = 'LOGIN' | 'RECOVERY_REQUEST' | 'RECOVERY_RESET' | 'REGISTER_ADMI
 
 interface AuthScreenProps {
   onBackToStore?: () => void;
+  onLoginSuccess?: () => void;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore, onLoginSuccess }) => {
   const { login, requestPasswordRecovery, confirmPasswordReset, registerAuthorizedAdmin, registerCustomer } = useAuth();
   const { success, error } = useToast();
 
@@ -35,11 +36,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore }) => {
   const [regPassword, setRegPassword] = useState('');
   const [regAuthKey, setRegAuthKey] = useState('');
 
-  // Quick fill helper for evaluator
-  const handleDemoFill = () => {
-    setEmail('admin@maisonroyale.com.br');
-    setPassword('admin123');
-  };
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,15 +45,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore }) => {
       return;
     }
     setLoading(true);
-    const res = await login(email, password);
-    setLoading(false);
-    if (res.success) {
-      success(res.message);
-    } else {
-      error(res.message);
-      if (res.message.includes('não confirmado') || res.message.includes('confirmed')) {
-        setNeedsConfirmation(true);
+    try {
+      const res = await login(email, password);
+      if (res.success) {
+        success(res.message);
+        if (onLoginSuccess) {
+          onLoginSuccess();
+        }
+      } else {
+        error(res.message);
+        if (res.message.includes('não confirmado') || res.message.includes('confirmed')) {
+          setNeedsConfirmation(true);
+        }
       }
+    } catch (err: any) {
+      error(err?.message || 'Falha na conexão com o serviço de autenticação.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -66,15 +71,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore }) => {
       return;
     }
     setLoading(true);
-    const { error: resendErr } = await supabase.auth.resend({
-      type: 'signup',
-      email: email.trim(),
-    });
-    setLoading(false);
-    if (!resendErr) {
-      success('Link de confirmação enviado para ' + email + '! Verifique seu e-mail.');
-    } else {
-      error(resendErr.message);
+    try {
+      const { error: resendErr } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+      });
+      if (!resendErr) {
+        success('Link de confirmação enviado para ' + email + '! Verifique seu e-mail.');
+      } else {
+        error(resendErr.message);
+      }
+    } catch (err: any) {
+      error(err?.message || 'Erro ao enviar confirmação.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -216,13 +226,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore }) => {
                   <Lock className="w-4 h-4 text-amber-400" />
                   Acesso Administrativo
                 </h2>
-                <button
-                  type="button"
-                  onClick={handleDemoFill}
-                  className="text-[11px] text-amber-400 hover:text-amber-300 underline underline-offset-2"
-                >
-                  Preencher Admin Demo
-                </button>
               </div>
 
               <div>
@@ -234,7 +237,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToStore }) => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@maisonroyale.com.br"
+                    placeholder="seu.email@exemplo.com"
                     className="w-full pl-10 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 transition-all"
                   />
                 </div>

@@ -16,7 +16,11 @@ import {
   X,
   ShieldCheck,
   Compass,
-  Layers
+  Layers,
+  Info,
+  Truck,
+  Gift,
+  Headphones
 } from 'lucide-react';
 import { Database, LUXURY_PRESET_IMAGES } from '../../services/database';
 import { Product } from '../../types';
@@ -57,7 +61,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
   const [isPublicMenuOpen, setIsPublicMenuOpen] = useState(false);
   const [socialModalOpen, setSocialModalOpen] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [products, setProducts] = useState<Product[]>(() => Database.getCachedProductsSync());
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -65,6 +70,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
       setProducts(p);
     };
     loadProducts();
+    window.addEventListener('mr_database_change', loadProducts);
+    return () => window.removeEventListener('mr_database_change', loadProducts);
   }, []);
 
   useEffect(() => {
@@ -74,13 +81,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
     return () => clearInterval(timer);
   }, []);
 
-  // Default display items for 3D cinematic floating showcase
-  const showcaseItems = products.length > 0 ? products.slice(0, 6) : [
-    { id: '1', name: 'Noir Oracle Extrait', brandName: 'House of Creed', salePrice: 1890, image: LUXURY_PRESET_IMAGES[0].url, concentration: 'Extrait de Parfum' },
-    { id: '2', name: 'Oud Ambre Impérial', brandName: 'Amouage', salePrice: 2450, image: LUXURY_PRESET_IMAGES[1].url, concentration: 'Eau de Parfum' },
-    { id: '3', name: 'Rêve de Rose & Ambre', brandName: 'Parfums de Marly', salePrice: 1680, image: LUXURY_PRESET_IMAGES[2].url, concentration: 'Extrait de Parfum' },
-    { id: '4', name: 'Aurélia Blanche Haute', brandName: 'Maison Francis Kurkdjian', salePrice: 1450, image: LUXURY_PRESET_IMAGES[3].url, concentration: 'Eau de Parfum' },
-  ];
+  // Shared display items for 3D cinematic floating showcase
+  const showcaseItems = (products.length > 0 ? products : Database.INITIAL_PRODUCTS).slice(0, 6);
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-28">
@@ -116,7 +118,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 font-serif text-xs text-amber-400 font-semibold uppercase tracking-widest">
+          <span>Haute Parfumerie</span>
         </div>
       </div>
 
@@ -199,20 +202,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
 
       {/* 3. & 4. ANIMAÇÃO PUBLICITÁRIA 3D — ELEMENTO PRINCIPAL (ÁREA CENTRAL COM LIMITES OBRIGATÓRIOS) */}
       <section className="relative my-10 py-8 px-4 rounded-3xl bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 border border-amber-500/30 shadow-2xl overflow-hidden">
-        {/* Cinematic Header */}
-        <div className="text-center space-y-2 mb-8 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-mono uppercase tracking-widest">
-            <Layers className="w-3.5 h-3.5" />
-            <span>Showcase Tridimensional 3D</span>
-          </div>
-          <h2 className="font-serif text-2xl sm:text-4xl font-bold text-white tracking-widest uppercase">
-            Frascos Cinematográficos Flutuantes
-          </h2>
-          <p className="text-xs text-zinc-400 max-w-lg mx-auto leading-relaxed">
-            Publicidade imersiva em loop contínuo de alta perfumaria com profundidade, rotação e circulação tridimensional.
-          </p>
-        </div>
-
         {/* 3D Floating Carousel Arena */}
         <div className="relative w-full h-[320px] sm:h-[380px] flex items-center justify-center overflow-hidden [perspective:1200px]">
           {/* Ambient Golden Glow Aura */}
@@ -265,55 +254,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
           </div>
         </div>
 
-        <div className="text-center pt-4 relative z-10">
-          <button
-            type="button"
-            onClick={() => onNavigate('vitrine')}
-            className="px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-amber-500/40 text-amber-300 text-xs font-semibold rounded-xl transition-all cursor-pointer inline-flex items-center gap-2"
-          >
-            <span>Ver Catálogo Completo na Vitrine</span>
-            <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
-          </button>
-        </div>
-      </section>
-
-      {/* 5. INSTITUTIONAL STORYTELLING & HERITAGE (Bottom Section with safety margin from footer) */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-        <div className="p-6 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between space-y-4 shadow-xl">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Crown className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="font-serif text-lg font-bold text-white">Herança & Maestria</h3>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-              Fragrâncias formuladas por mestre perfumistas em Grasse e frascos lapidados artesanalmente com selo real de autenticidade.
-            </p>
-          </div>
-        </div>
-
-        <div className="p-6 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between space-y-4 shadow-xl">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="font-serif text-lg font-bold text-white">Selo de Pureza Rara</h3>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-              Extrações puríssimas de Oud selvagem de Assam, âmbar cinzento e absoluto de rosas centifólias com rastreabilidade garantida.
-            </p>
-          </div>
-        </div>
-
-        <div className="p-6 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between space-y-4 shadow-xl">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Compass className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="font-serif text-lg font-bold text-white">Ateliê Flagship SP</h3>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-              Visite nossa flaghship store nos Jardins em São Paulo para uma experiência olfativa imersiva com degustação de extratos.
-            </p>
-          </div>
-        </div>
       </section>
 
       {/* PUBLIC SIDE MENU DRAWER */}
@@ -374,10 +314,22 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
                     setIsPublicMenuOpen(false);
                     onNavigate('vitrine');
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-medium text-zinc-300 hover:bg-zinc-900 border border-zinc-800 transition-all text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-medium text-zinc-300 hover:bg-zinc-900 border border-zinc-800 transition-all text-left cursor-pointer"
                 >
                   <ShoppingBag className="w-4 h-4 text-amber-400" />
                   <span>Vitrine & Loja Virtual</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPublicMenuOpen(false);
+                    setInfoModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-serif font-bold text-amber-300 hover:bg-zinc-900 border border-amber-500/40 transition-all text-left uppercase tracking-wider cursor-pointer"
+                >
+                  <Info className="w-4 h-4 text-amber-400" />
+                  <span>INFORMAÇÕES</span>
                 </button>
 
                 <button
@@ -503,6 +455,134 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, onOpenChat }) =>
                 className="px-4 py-2 bg-zinc-800 text-zinc-200 rounded-lg text-xs"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* INFORMAÇÕES MODAL */}
+      {infoModalOpen && (
+        <Modal
+          isOpen={infoModalOpen}
+          onClose={() => setInfoModalOpen(false)}
+          title="INFORMAÇÕES DA MAISON ROYALE"
+          subtitle="Diferenciais institucionais, garantias e experiência exclusiva da Maison Royale"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 my-1 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Item 1: Herança & Maestria */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <Crown className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  Herança & Maestria
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Fragrâncias formuladas por mestre perfumistas em Grasse e frascos lapidados artesanalmente com selo real de autenticidade.
+                </p>
+              </div>
+
+              {/* Item 2: Selo de Pureza Rara */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  Selo de Pureza Rara
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Extrações puríssimas de Oud selvagem de Assam, âmbar cinzento e absoluto de rosas centifólias com rastreabilidade garantida.
+                </p>
+              </div>
+
+              {/* Item 3: Ateliê Flagship SP */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <Compass className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  Ateliê Flagship SP
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Visite nossa flagship store nos Jardins em São Paulo para uma experiência olfativa imersiva com degustação de extratos.
+                </p>
+              </div>
+
+              {/* Item 4: Catálogo Completo na Vitrine */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <ShoppingBag className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  Catálogo na Vitrine
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Acesso exclusivo a coleções privadas, edições limitadas e exibições tridimensionais da alta perfumaria na Vitrine.
+                </p>
+              </div>
+
+              {/* Item 5: 100% Autêntico */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  100% Autêntico
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Frascos lacrados e importações com selo oficial de rastreabilidade.
+                </p>
+              </div>
+
+              {/* Item 6: Envio Assegurado */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <Truck className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  Envio Assegurado
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Embalagem de alta proteção térmica com seguro total contra avarias.
+                </p>
+              </div>
+
+              {/* Item 7: Amostras Cortesia */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <Gift className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  Amostras Cortesia
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  2 amostras de extratos raros selecionados em todas as compras.
+                </p>
+              </div>
+
+              {/* Item 8: Concierge Olfativo */}
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-amber-500/30 shadow-lg space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                  <Headphones className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wider">
+                  Concierge Olfativo
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Sommeliers disponíveis para consultoria e dúvidas sobre notas olfativas.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-zinc-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setInfoModalOpen(false)}
+                className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:from-amber-400 hover:to-amber-500 transition-all cursor-pointer shadow-md"
+              >
+                Compreendido
               </button>
             </div>
           </div>

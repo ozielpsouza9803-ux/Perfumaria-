@@ -25,6 +25,7 @@ import { VitrineView } from './components/views/VitrineView';
 import { CustomerPortalView } from './components/views/CustomerPortalView';
 import { BottomNav } from './components/common/BottomNav';
 import { ConciergeChatModal } from './components/common/ConciergeChatModal';
+import { AiGestoraModal } from './components/common/AiGestoraModal';
 
 import { CartProvider } from './context/CartContext';
 import { CartDrawer } from './components/common/CartDrawer';
@@ -50,6 +51,7 @@ const AdminLayout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
   // Badge notification counts
   const [badgeCounts, setBadgeCounts] = useState({
@@ -210,18 +212,31 @@ const AdminLayout: React.FC = () => {
     quickActionLabel = 'Novo Cliente';
   }
 
-  // Admin Module Access Guard
+  // Admin Module Access Guard: strictly verifies authentication and valid administrative role
   const isAdminModule = !isPublicTab;
+  const validAdminRoles = ['admin', 'super_admin', 'gerente', 'estoquista', 'consultor'];
+  const userRoleNormalized = String(currentAdmin?.role || '').toLowerCase().trim();
+  const isAuthorizedAdmin = Boolean(
+    isAuthenticated &&
+    currentAdmin &&
+    currentAdmin.active !== false &&
+    validAdminRoles.includes(userRoleNormalized)
+  );
 
-  if (!isAuthenticated && isAdminModule) {
-    return <AuthScreen onBackToStore={() => setCurrentTab('home')} />;
+  if (!isAuthorizedAdmin && isAdminModule) {
+    return (
+      <AuthScreen
+        onBackToStore={() => setCurrentTab('home')}
+        onLoginSuccess={() => setCurrentTab('dashboard')}
+      />
+    );
   }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col antialiased">
       <div className="flex-1 flex overflow-hidden">
         {/* Responsive luxury sidebar — ONLY for Admin modules */}
-        {isAdminModule && isAuthenticated && (
+        {isAdminModule && isAuthorizedAdmin && (
           <Sidebar
             currentTab={currentTab}
             onSelectTab={setCurrentTab}
@@ -230,13 +245,14 @@ const AdminLayout: React.FC = () => {
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             badgeCounts={badgeCounts}
+            onOpenAi={() => setIsAiModalOpen(true)}
           />
         )}
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           {/* Top Bar with 3-zone contract — ONLY for Admin modules */}
-          {isAdminModule && isAuthenticated && (
+          {isAdminModule && isAuthorizedAdmin && (
             <TopBar
               currentTab={currentTab}
               onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
@@ -325,6 +341,12 @@ const AdminLayout: React.FC = () => {
         isOpen={isQuickSearchOpen}
         onClose={() => setIsQuickSearchOpen(false)}
         onNavigate={setCurrentTab}
+      />
+
+      {/* IA Gestora Central Modal */}
+      <AiGestoraModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
       />
     </div>
   );

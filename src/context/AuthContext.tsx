@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AdminUser, AdminRole } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   currentAdmin: AdminUser | null;
@@ -35,95 +35,115 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const fetchAdminProfile = async (user: any) => {
+  const fetchAdminProfile = async (user: any): Promise<boolean> => {
     try {
+      // Query public.profiles by user UUID
       const { data } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (data) {
+      const roleFromProfile = data?.role || user.user_metadata?.role || '';
+      const normalizedRole = String(roleFromProfile).toLowerCase().trim();
+      const validAdminRoles = ['admin', 'super_admin', 'gerente', 'estoquista', 'consultor'];
+      const isAdminRole = validAdminRoles.includes(normalizedRole);
+
+      if (isAdminRole) {
         const loadedAdmin: AdminUser = {
-          id: data.id,
-          name: data.full_name || data.name || user.user_metadata?.name || user.email?.split('@')[0] || 'Admin',
-          email: user.email || data.email || '',
-          role: (data.role || user.user_metadata?.role || 'SUPER_ADMIN') as AdminRole,
-          phone: data.phone || user.user_metadata?.phone || '',
-          avatar: data.avatar_url || data.avatar,
-          active: data.active ?? true,
-          createdAt: data.created_at || user.created_at,
-          lastLogin: data.updated_at || new Date().toISOString(),
-        };
-        setCurrentAdmin(loadedAdmin);
-        localStorage.setItem('mr_admin_session', JSON.stringify(loadedAdmin));
-      } else {
-        // If profile row doesn't exist yet, create or use user_metadata
-        const newProfile: AdminUser = {
           id: user.id,
-          name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Administrador',
-          email: user.email || '',
-          role: (user.user_metadata?.role || 'SUPER_ADMIN') as AdminRole,
-          phone: user.user_metadata?.phone || '',
-          active: true,
-          createdAt: user.created_at || new Date().toISOString(),
+          name: data?.full_name || data?.name || user.user_metadata?.name || user.email?.split('@')[0] || 'Administrador',
+          email: user.email || data?.email || '',
+          role: (data?.role || 'admin') as AdminRole,
+          phone: data?.phone || user.user_metadata?.phone || '',
+          avatar: data?.avatar_url || data?.avatar,
+          active: data?.active ?? true,
+          createdAt: data?.created_at || user.created_at,
           lastLogin: new Date().toISOString(),
         };
-        setCurrentAdmin(newProfile);
-        localStorage.setItem('mr_admin_session', JSON.stringify(newProfile));
 
-        // Attempt to save to profiles table
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name: newProfile.name,
-          role: newProfile.role,
-          phone: newProfile.phone,
-        });
+        if (loadedAdmin.active !== false) {
+          setCurrentAdmin(loadedAdmin);
+          localStorage.setItem('mr_admin_session', JSON.stringify(loadedAdmin));
+          return true;
+        }
       }
+
+      // If user profile is not an active admin role (e.g. customer account)
+      setCurrentAdmin(null);
+      localStorage.removeItem('mr_admin_session');
+      return false;
     } catch (err) {
       console.error('Unexpected error in fetchAdminProfile:', err);
+      setCurrentAdmin(null);
+      localStorage.removeItem('mr_admin_session');
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchAdminProfile(session.user);
-      } else {
-        // Fallback: Check persistent local admin session
-        const stored = localStorage.getItem('mr_admin_session');
-        if (stored) {
-          try {
-            setCurrentAdmin(JSON.parse(stored));
-          } catch (e) {
-            localStorage.removeItem('mr_admin_session');
-          }
-        }
-        setIsLoading(false);
-      }
-    });
+  const loadLocalSession = () => {
+    const stored = localStorage.getItem('mr_admin_session');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        fetchAdminProfile(session.user);
-      } else {
-        const stored = localStorage.getItem('mr_admin_session');
-        if (stored) {
-          try {
-            setCurrentAdmin(JSON.parse(stored));
-          } catch (e) {
-            setCurrentAdmin(null);
-          }
+        // 1. Expiration validation (only applies if expiresAt was explicitly set)
+        if (typeof parsed.expiresAt === 'number' && Date.now() > parsed.expiresAt) {
+          localStorage.removeItem('mr_admin_session');
+          setCurrentAdmin(null);
+          setIsLoading(false);
+          return;
+        }
+
+        // 2. Role authorization validation: normalize role and accept valid administrative roles
+        const validAdminRoles = ['admin', 'super_admin', 'gerente', 'estoquista', 'consultor'];
+        const roleCandidate = typeof parsed.role === 'string' ? parsed.role.toLowerCase().trim() : '';
+
+        if (validAdminRoles.includes(roleCandidate) && parsed.active !== false) {
+          setCurrentAdmin(parsed);
         } else {
+          localStorage.removeItem('mr_admin_session');
           setCurrentAdmin(null);
         }
-        setIsLoading(false);
+      } catch (e) {
+        localStorage.removeItem('mr_admin_session');
+        setCurrentAdmin(null);
       }
-    });
+    } else {
+      setCurrentAdmin(null);
+    }
+    setIsLoading(false);
+  };
 
-    return () => subscription.unsubscribe();
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      supabase.auth.getSession()
+        .then(({ data: { session } }) => {
+          if (session?.user) {
+            fetchAdminProfile(session.user);
+          } else {
+            loadLocalSession();
+          }
+        })
+        .catch((err) => {
+          console.warn('Supabase getSession notice:', err?.message || err);
+          loadLocalSession();
+        });
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          fetchAdminProfile(session.user);
+        } else {
+          loadLocalSession();
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    } else {
+      loadLocalSession();
+    }
   }, []);
 
   const setTestingRole = (role: AdminRole) => {
@@ -133,66 +153,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('mr_admin_session', JSON.stringify(updated));
   };
 
-  const login = async (email: string, pass: string) => {
-    // 1. Attempt official Supabase Auth signIn
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
-    if (!error && data.session?.user) {
-      await fetchAdminProfile(data.session.user);
-      return { success: true, message: 'Bem-vindo ao Ateliê Administrativo!' };
-    }
+  const login = async (email: string, pass: string): Promise<{ success: boolean; message: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
 
-    // 2. If Supabase Auth returns 'Email not confirmed' or 'Invalid credentials', verify via secure server proxy
+    // Authenticate exclusively via Supabase Auth
     try {
-      const serverRes = await fetch('/api/admin-auth-fallback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password: pass }),
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: pass,
       });
 
-      if (serverRes.ok) {
-        const body = await serverRes.json();
-        if (body.success && body.admin) {
-          setCurrentAdmin(body.admin);
-          localStorage.setItem('mr_admin_session', JSON.stringify(body.admin));
+      if (error) {
+        if (error.message.includes('Email not confirmed')) {
+          return {
+            success: false,
+            message: 'E-mail não confirmado. Verifique sua caixa de entrada para validar o acesso cadastrado no Supabase.',
+          };
+        }
+        return {
+          success: false,
+          message: 'Credenciais inválidas. Verifique o e-mail e a senha cadastrados no Supabase.',
+        };
+      }
 
-          // Sync with Supabase profiles table
-          try {
-            await supabase.from('profiles').upsert({
-              id: body.admin.id,
-              full_name: body.admin.name,
-              role: body.admin.role,
-              phone: body.admin.phone,
-            });
-          } catch (e) {
-            console.warn('Sync profile notice:', e);
-          }
+      if (data.session?.user) {
+        // Query public.profiles by UUID to verify administrative privileges
+        const isAuthorizedAdmin = await fetchAdminProfile(data.session.user);
 
-          return { success: true, message: `Bem-vindo, ${body.admin.name}!` };
+        if (isAuthorizedAdmin) {
+          return { success: true, message: 'Bem-vindo ao Painel Administrativo!' };
+        } else {
+          // User authenticated, but is a customer without admin privileges
+          await supabase.auth.signOut().catch(() => {});
+          return {
+            success: false,
+            message: 'Acesso restrito. Esta conta de e-mail não possui privilégios de administrador.',
+          };
         }
       }
-    } catch (e) {
-      console.warn('Server auth fallback notice:', e);
-    }
 
-    if (error?.message.includes('Email not confirmed')) {
       return {
         success: false,
-        message: 'E-mail não confirmado. Verifique sua caixa de entrada (ou spam) para validar o acesso cadastrado no Supabase.',
+        message: 'Falha ao autenticar. Tente novamente.',
       };
-    }
-
-    if (error?.message.includes('Invalid login credentials')) {
+    } catch (err: any) {
+      console.error('Supabase Auth error:', err?.message || err);
       return {
         success: false,
-        message: 'Credenciais inválidas. Verifique o e-mail corporativo e a senha informada.',
+        message: 'Erro na conexão com o Supabase Auth. Verifique sua conexão e tente novamente.',
       };
     }
-
-    return { success: false, message: error?.message || 'Erro ao realizar login.' };
   };
 
   const logout = () => {
-    supabase.auth.signOut();
+    if (isSupabaseConfigured) {
+      try {
+        supabase.auth.signOut().catch(() => {});
+      } catch (e) {}
+    }
     localStorage.removeItem('mr_admin_session');
     setCurrentAdmin(null);
   };

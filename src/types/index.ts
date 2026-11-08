@@ -10,6 +10,8 @@ export interface AdminUser {
   active: boolean;
   createdAt: string;
   lastLogin?: string;
+  token?: string;
+  expiresAt?: number;
 }
 
 export interface Brand {

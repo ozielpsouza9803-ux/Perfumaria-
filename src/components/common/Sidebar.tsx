@@ -20,6 +20,7 @@ import {
   Sparkles,
   DollarSign,
   Home,
+  Bot,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { AdminRole } from '../../types';
@@ -67,6 +68,7 @@ interface SidebarProps {
     pendingPayments: number;
     upcomingAppointments: number;
   };
+  onOpenAi: () => void;
 }
 
 interface MenuItem {
@@ -78,6 +80,7 @@ interface MenuItem {
   badgeType?: 'alert' | 'info';
   category: 'VISÃO GERAL' | 'CADASTROS & CATÁLOGO' | 'OPERAÇÃO & VENDAS' | 'FINANÇAS & SEGURANÇA';
   allowedRoles?: AdminRole[];
+  isAiAction?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -88,6 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapse,
   badgeCounts,
+  onOpenAi,
 }) => {
   const { currentAdmin, logout } = useAuth();
   const userRole: AdminRole = currentAdmin?.role || 'CONSULTOR';
@@ -103,6 +107,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: LayoutDashboard,
       category: 'VISÃO GERAL',
       allowedRoles: ALL_ROLES,
+    },
+    // IA GESTORA
+    {
+      id: 'dashboard',
+      label: 'IA GESTORA',
+      subLabel: 'Central de Inteligência',
+      icon: Bot,
+      category: 'VISÃO GERAL',
+      allowedRoles: ALL_ROLES,
+      isAiAction: true,
     },
     // 2. Cadastros
     {
@@ -196,9 +210,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const visibleMenuItems = menuItems;
 
-  const handleItemClick = (id: NavTab) => {
-    onSelectTab(id);
-    onCloseMobile();
+  const handleItemClick = (item: MenuItem) => {
+    if (item.isAiAction) {
+      onOpenAi();
+      onCloseMobile();
+    } else {
+      onSelectTab(item.id);
+      onCloseMobile();
+    }
   };
 
   return (
@@ -253,9 +272,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const isActive = currentTab === item.id;
             return (
               <button
-                key={item.id}
+                key={item.label}
                 type="button"
-                onClick={() => handleItemClick(item.id)}
+                onClick={() => handleItemClick(item)}
                 title={isCollapsed ? item.label : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all group relative cursor-pointer ${
                   isActive

@@ -74,7 +74,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </button>
             <button
               onClick={() => onNavigate('stock')}
-              className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-amber-500/40 text-xs font-medium rounded-lg transition-all cursor-pointer flex items-center gap-2"
+              className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-medium rounded-lg transition-all cursor-pointer hidden sm:flex items-center gap-2"
             >
               <Boxes className="w-3.5 h-3.5" />
               <span>Inventário</span>
