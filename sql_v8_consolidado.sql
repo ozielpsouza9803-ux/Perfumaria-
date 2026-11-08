@@ -1,15 +1,14 @@
 -- ==============================================================================
--- MAISON ROYALE | IA GESTORA V8.2 - CONSOLIDAÇÃO FINAL DEFINITIVA
--- OBJETIVO: Segurança Máxima, Idempotência Atômica e Integridade Transacional.
+-- MAISON ROYALE | IA GESTORA V8.2 - CORREÇÃO FINAL CIRÚRGICA
+-- OBJETIVO: Idempotência Atômica, Validações Estritas e Integridade de Schema.
 -- ==============================================================================
 
 -- 1. PREPARAÇÃO DO SCHEMA E EXTENSÕES
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Garantir colunas na tabela products (respeitando tipos reais e schema confirmado)
 DO $$ 
 BEGIN
-    -- Adicionar colunas se não existirem (usando tipos baseados no database.ts e schema real)
+    -- Garantir colunas na tabela products conforme schema mapeado no database.ts
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'products' AND column_name = 'top_notes') THEN
         ALTER TABLE public.products ADD COLUMN top_notes TEXT;
     END IF;
@@ -41,7 +40,7 @@ END $$;
 
 -- 2. TABELAS OPERACIONAIS
 
--- Chaves de Idempotência (Atômicas e Concorrentes)
+-- Chaves de Idempotência (Atômicas)
 CREATE TABLE IF NOT EXISTS public.idempotency_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key_hash TEXT UNIQUE NOT NULL,
@@ -53,9 +52,8 @@ CREATE TABLE IF NOT EXISTS public.idempotency_keys (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_idempotency_key_hash ON public.idempotency_keys(key_hash);
 
--- Auditoria Imutável (Append-Only)
+-- Auditoria Imutável
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     admin_id UUID,
@@ -68,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Movimentações de Estoque (Append-Only)
+-- Movimentações de Estoque
 CREATE TABLE IF NOT EXISTS public.inventory_movements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id TEXT NOT NULL REFERENCES public.products(id),
@@ -83,7 +81,6 @@ CREATE TABLE IF NOT EXISTS public.inventory_movements (
 );
 
 -- 3. SEGURANÇA E POLÍTICAS RLS
-
 ALTER TABLE public.idempotency_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_movements ENABLE ROW LEVEL SECURITY;
@@ -93,7 +90,7 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.idempotency_keys FROM authenti
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.audit_logs FROM authenticated, anon, public;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.inventory_movements FROM authenticated, anon, public;
 
--- Políticas de Leitura (Somente ADM/GERENTE via profiles)
+-- Políticas de Leitura
 DROP POLICY IF EXISTS "Admins can view idempotency" ON public.idempotency_keys;
 CREATE POLICY "Admins can view idempotency" ON public.idempotency_keys
     FOR SELECT TO authenticated USING (
@@ -112,19 +109,19 @@ CREATE POLICY "Admins can view movements" ON public.inventory_movements
         EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('SUPER_ADMIN', 'GERENTE'))
     );
 
--- Bloqueio de Alteração/Exclusão (Triggers de Imutabilidade)
-CREATE OR REPLACE FUNCTION public.prevent_immutable_violation()
+-- Triggers de Imutabilidade
+CREATE OR REPLACE FUNCTION public.prevent_modification_final()
 RETURNS TRIGGER AS $$
 BEGIN
-    RAISE EXCEPTION 'Violação de Imutabilidade: Registros administrativos não podem ser alterados ou removidos.';
+    RAISE EXCEPTION 'Operação negada: Históricos e auditorias administrativas são imutáveis.';
 END;
 $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS tr_immutable_audit ON public.audit_logs;
-CREATE TRIGGER tr_immutable_audit BEFORE UPDATE OR DELETE OR TRUNCATE ON public.audit_logs FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_immutable_violation();
+CREATE TRIGGER tr_immutable_audit BEFORE UPDATE OR DELETE OR TRUNCATE ON public.audit_logs FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_modification_final();
 
 DROP TRIGGER IF EXISTS tr_immutable_movements ON public.inventory_movements;
-CREATE TRIGGER tr_immutable_movements BEFORE UPDATE OR DELETE OR TRUNCATE ON public.inventory_movements FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_immutable_violation();
+CREATE TRIGGER tr_immutable_movements BEFORE UPDATE OR DELETE OR TRUNCATE ON public.inventory_movements FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_modification_final();
 
 -- 4. RPC CENTRALIZADA: execute_gestora_operation_v8_2
 
@@ -136,11 +133,11 @@ CREATE OR REPLACE FUNCTION public.execute_gestora_operation_v8_2(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, public, extensions, pg_temp
 AS $$
 DECLARE
-    v_admin_id UUID;
-    v_payload_hash TEXT;
+    v_admin_id UUID := auth.uid();
+    v_payload_hash TEXT := encode(digest(p_payload::text, 'sha256'), 'hex');
     v_existing_status TEXT;
     v_existing_admin UUID;
     v_existing_payload_hash TEXT;
@@ -150,6 +147,7 @@ DECLARE
     v_admin_name TEXT;
     v_admin_email TEXT;
     v_result JSONB;
+    v_row_count INTEGER;
     
     -- Variaveis de Negócio
     v_product_id TEXT;
@@ -159,182 +157,188 @@ DECLARE
     v_move_type TEXT;
     v_sale_price NUMERIC;
 BEGIN
-    -- 1. Identidade Autenticada (Contexto Supabase Auth)
-    v_admin_id := auth.uid();
+    -- 1. Validação de Identidade e Autorização
     IF v_admin_id IS NULL THEN
-        RAISE EXCEPTION 'Não autorizado: Identidade não encontrada no contexto JWT.';
+        RAISE EXCEPTION 'Não autorizado: Identidade não confirmada via Supabase Auth.';
     END IF;
 
-    -- 2. Validação de Perfil Administrativo
-    SELECT role, full_name, email INTO v_admin_role, v_admin_name, v_admin_email
-    FROM public.profiles
-    WHERE id = v_admin_id;
+    -- profiles.email e profiles.full_name são tratados de forma segura
+    SELECT role, full_name INTO v_admin_role, v_admin_name FROM public.profiles WHERE id = v_admin_id;
+    BEGIN
+        SELECT email INTO v_admin_email FROM public.profiles WHERE id = v_admin_id;
+    EXCEPTION WHEN OTHERS THEN
+        v_admin_email := NULL;
+    END;
 
     IF v_admin_role IS NULL OR v_admin_role NOT IN ('SUPER_ADMIN', 'GERENTE') THEN
-        RAISE EXCEPTION 'Acesso Negado: Perfil administrativo (SUPER_ADMIN ou GERENTE) necessário.';
+        RAISE EXCEPTION 'Acesso Negado: Perfil administrativo necessário para esta operação.';
     END IF;
 
-    -- 3. Idempotência Atômica (Prevenção de Duplicidade Concorrente)
-    v_payload_hash := encode(digest(p_payload::text, 'sha256'), 'hex');
-
-    -- Tentar reservar a chave (Atomic Insert)
+    -- 2. Mecanismo de Idempotência Atômica
+    -- Tenta inserir o estado PROCESSING. Se a chave já existe, não faz nada (DO NOTHING)
     INSERT INTO public.idempotency_keys (key_hash, admin_id, action_type, payload_hash, status)
     VALUES (p_idempotency_key, v_admin_id, p_action_type, v_payload_hash, 'PROCESSING')
     ON CONFLICT (key_hash) DO NOTHING;
+    
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
 
-    -- Obter estado atual com lock de linha (Row-Level Lock)
+    -- Lock de linha e obtenção do estado atual para garantir atomicidade em concorrência
     SELECT status, admin_id, payload_hash, action_type, response 
     INTO v_existing_status, v_existing_admin, v_existing_payload_hash, v_existing_action, v_existing_response
     FROM public.idempotency_keys
     WHERE key_hash = p_idempotency_key
     FOR UPDATE;
 
-    IF FOUND THEN
-        -- Caso 1: Operação já finalizada com sucesso
+    -- Se não fomos nós que inserimos (v_row_count = 0)
+    IF v_row_count = 0 THEN
         IF v_existing_status = 'SUCCESS' THEN
-            -- Garantir que os parâmetros originais conferem
+            -- Se a chave foi usada com sucesso para a mesma operação, retorna o cache
             IF v_existing_admin = v_admin_id AND v_existing_action = p_action_type AND v_existing_payload_hash = v_payload_hash THEN
                 RETURN v_existing_response;
             ELSE
-                RAISE EXCEPTION 'Conflito de Idempotência: A chave fornecida já foi utilizada para uma operação diferente.';
+                RAISE EXCEPTION 'Erro de Idempotência: Esta chave já foi vinculada a outra operação ou payload.';
             END IF;
-        
-        -- Caso 2: Operação em andamento (por outro processo ou timeout)
         ELSIF v_existing_status = 'PROCESSING' THEN
-            -- Se foi inserido há muito tempo, pode ter travado (ex: erro fatal do DB)
-            -- Como estamos em uma única transação Supabase RPC, se o processo travar, a transação reverte.
-            -- Mas se chegamos aqui e o status é PROCESSING, significa que outra transação ainda não deu COMMIT ou ROLLBACK.
-            RAISE EXCEPTION 'Operação em processamento: Por favor, aguarde o término da requisição anterior.';
-        END IF;
-        
-        -- Caso 3: Status ERROR (Permitir tentativa se o payload for idêntico)
-        IF v_existing_status = 'ERROR' AND v_existing_payload_hash = v_payload_hash THEN
-            UPDATE public.idempotency_keys SET status = 'PROCESSING', updated_at = now() WHERE key_hash = p_idempotency_key;
-        ELSIF v_existing_status = 'ERROR' THEN
-            RAISE EXCEPTION 'Erro de Idempotência: Chave associada a um erro anterior com parâmetros divergentes.';
+            -- Se outra transação ainda está rodando, o SELECT FOR UPDATE acima esperará ela terminar.
+            -- Após o término, se o status mudar para SUCCESS, a linha acima será re-avaliada ou dará erro se re-executada.
+            RAISE EXCEPTION 'Operação em processamento paralelo: Por favor, aguarde.';
+        ELSE
+            -- Se status for ERROR e chegamos aqui, permitimos tentar novamente re-utilizando a chave nesta transação
+            UPDATE public.idempotency_keys 
+            SET status = 'PROCESSING', admin_id = v_admin_id, action_type = p_action_type, payload_hash = v_payload_hash, updated_at = now()
+            WHERE key_hash = p_idempotency_key;
         END IF;
     END IF;
 
-    -- 4. Execução Transacional das Operações de Negócio
-    BEGIN
-        CASE p_action_type
-            WHEN 'CREATE_PRODUCT' THEN
-                -- Validações de Produto
-                IF p_payload->>'name' IS NULL OR p_payload->>'sku' IS NULL OR p_payload->>'brandId' IS NULL THEN
-                    RAISE EXCEPTION 'Dados incompletos: nome, SKU e marca são obrigatórios.';
-                END IF;
+    -- 3. Execução das Operações de Negócio
+    CASE p_action_type
+        WHEN 'CREATE_PRODUCT' THEN
+            -- Validações Obrigatórias
+            IF p_payload->>'name' IS NULL OR p_payload->>'sku' IS NULL OR p_payload->>'brandId' IS NULL THEN
+                RAISE EXCEPTION 'Dados incompletos: nome, SKU e marca são campos obrigatórios.';
+            END IF;
 
-                -- Prevenção de SKU duplicado atômica
-                IF EXISTS (SELECT 1 FROM public.products WHERE sku = p_payload->>'sku') THEN
-                    RAISE EXCEPTION 'SKU já existente: O código % já está em uso.', p_payload->>'sku';
-                END IF;
+            v_sale_price := (p_payload->>'salePrice')::NUMERIC;
+            IF v_sale_price IS NULL OR v_sale_price <= 0 THEN
+                RAISE EXCEPTION 'Preço de venda inválido: Deve ser um valor positivo.';
+            END IF;
 
-                INSERT INTO public.products (
-                    id, sku, name, brand_id, olfactory_family, concentration, volume_ml,
-                    purchase_price, sale_price, stock_quantity, min_stock_alert,
-                    image, status, description, top_notes, heart_notes, base_notes
-                ) VALUES (
-                    COALESCE(p_payload->>'id', 'prod_' || replace(gen_random_uuid()::text, '-', '')),
-                    p_payload->>'sku',
-                    p_payload->>'name',
-                    p_payload->>'brandId',
-                    p_payload->>'olfactoryFamily',
-                    p_payload->>'concentration',
-                    (p_payload->>'volumeMl')::INTEGER,
-                    COALESCE((p_payload->>'purchasePrice')::NUMERIC, 0),
-                    (p_payload->>'salePrice')::NUMERIC,
-                    COALESCE((p_payload->>'stockQuantity')::INTEGER, 0),
-                    COALESCE((p_payload->>'minStockAlert')::INTEGER, 5),
-                    COALESCE(p_payload->>'image', 'https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&w=800&q=80'),
-                    'Ativo',
-                    p_payload->>'description',
-                    p_payload->>'topNotes',
-                    p_payload->>'heartNotes',
-                    p_payload->>'baseNotes'
-                ) RETURNING id INTO v_product_id;
+            -- Verificação de SKU duplicado
+            IF EXISTS (SELECT 1 FROM public.products WHERE sku = p_payload->>'sku') THEN
+                RAISE EXCEPTION 'SKU Duplicado: O código % já pertence a outro produto.', p_payload->>'sku';
+            END IF;
 
-                v_result := jsonb_build_object('success', true, 'message', 'Produto ' || p_payload->>'name' || ' cadastrado.', 'id', v_product_id);
+            -- Todas as colunas abaixo confirmadas via database.ts
+            INSERT INTO public.products (
+                id, sku, name, brand_id, olfactory_family, concentration, volume_ml,
+                purchase_price, sale_price, stock_quantity, min_stock_alert,
+                image, status, description, top_notes, heart_notes, base_notes
+            ) VALUES (
+                COALESCE(p_payload->>'id', 'prod_' || replace(gen_random_uuid()::text, '-', '')),
+                p_payload->>'sku',
+                p_payload->>'name',
+                p_payload->>'brandId',
+                p_payload->>'olfactoryFamily',
+                p_payload->>'concentration',
+                (p_payload->>'volumeMl')::INTEGER,
+                COALESCE((p_payload->>'purchasePrice')::NUMERIC, 0),
+                v_sale_price,
+                COALESCE((p_payload->>'stockQuantity')::INTEGER, 0),
+                COALESCE((p_payload->>'minStockAlert')::INTEGER, 5),
+                COALESCE(p_payload->>'image', 'https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&w=800&q=80'),
+                'Ativo',
+                p_payload->>'description',
+                p_payload->>'topNotes',
+                p_payload->>'heartNotes',
+                p_payload->>'baseNotes'
+            ) RETURNING id INTO v_product_id;
 
-            WHEN 'UPDATE_STOCK' THEN
-                v_product_id := p_payload->>'productId';
-                v_quantity := (p_payload->>'quantity')::INTEGER;
-                v_move_type := p_payload->>'type';
+            v_result := jsonb_build_object('success', true, 'message', 'Produto ' || p_payload->>'name' || ' cadastrado com sucesso.', 'id', v_product_id);
 
-                IF v_product_id IS NULL OR v_quantity IS NULL OR v_move_type IS NULL OR v_quantity < 0 THEN
-                    RAISE EXCEPTION 'Dados de estoque inválidos: Quantidade deve ser não negativa.';
-                END IF;
+        WHEN 'UPDATE_STOCK' THEN
+            v_product_id := p_payload->>'productId';
+            v_quantity := (p_payload->>'quantity')::INTEGER;
+            v_move_type := p_payload->>'type';
 
-                -- Lock do Produto para evitar race conditions no saldo
-                SELECT stock_quantity INTO v_old_stock FROM public.products WHERE id = v_product_id FOR UPDATE;
-                IF NOT FOUND THEN RAISE EXCEPTION 'Produto não encontrado (ID: %).', v_product_id; END IF;
+            -- Validações de Quantidade
+            IF v_product_id IS NULL OR v_quantity IS NULL OR v_move_type IS NULL THEN
+                RAISE EXCEPTION 'Parâmetros insuficientes para atualização de estoque.';
+            END IF;
 
-                IF v_move_type = 'ENTRADA' THEN
-                    v_new_stock := v_old_stock + v_quantity;
-                ELSIF v_move_type = 'SAIDA' THEN
-                    v_new_stock := v_old_stock - v_quantity;
-                ELSIF v_move_type = 'AJUSTE' THEN
-                    v_new_stock := v_quantity;
-                ELSE
-                    RAISE EXCEPTION 'Tipo de movimentação desconhecido: %', v_move_type;
-                END IF;
+            IF v_move_type IN ('ENTRADA', 'SAIDA') AND v_quantity <= 0 THEN
+                RAISE EXCEPTION 'Quantidade inválida para %: Deve ser um número inteiro positivo.', v_move_type;
+            END IF;
 
-                IF v_new_stock < 0 THEN
-                    RAISE EXCEPTION 'Estoque Insuficiente: Saldo atual é %, impossível realizar saída de %.', v_old_stock, v_quantity;
-                END IF;
+            IF v_move_type = 'AJUSTE' AND v_quantity < 0 THEN
+                RAISE EXCEPTION 'Quantidade inválida para AJUSTE: Não pode ser negativa.';
+            END IF;
 
-                -- Atualização Atômica
-                UPDATE public.products SET stock_quantity = v_new_stock, updated_at = now() WHERE id = v_product_id;
+            -- Bloqueio do produto para evitar race conditions de estoque
+            SELECT stock_quantity INTO v_old_stock FROM public.products WHERE id = v_product_id FOR UPDATE;
+            IF NOT FOUND THEN RAISE EXCEPTION 'Produto inexistente (ID: %).', v_product_id; END IF;
 
-                -- Registro de Movimentação (Imutável)
-                INSERT INTO public.inventory_movements (product_id, type, quantity, previous_stock, new_stock, reason, admin_id, admin_name)
-                VALUES (v_product_id, v_move_type, v_quantity, v_old_stock, v_new_stock, p_payload->>'reason', v_admin_id, v_admin_name);
-
-                v_result := jsonb_build_object('success', true, 'message', 'Estoque atualizado: ' || v_new_stock || ' unidades.', 'new_stock', v_new_stock);
-
-            WHEN 'UPDATE_PRICE' THEN
-                v_product_id := p_payload->>'productId';
-                v_sale_price := (p_payload->>'newPrice')::NUMERIC;
-
-                IF v_product_id IS NULL OR v_sale_price IS NULL OR v_sale_price <= 0 THEN
-                    RAISE EXCEPTION 'ID do produto ou preço inválido. Preço deve ser positivo.';
-                END IF;
-
-                UPDATE public.products SET sale_price = v_sale_price, updated_at = now() WHERE id = v_product_id;
-                IF NOT FOUND THEN RAISE EXCEPTION 'Produto não encontrado.'; END IF;
-
-                v_result := jsonb_build_object('success', true, 'message', 'Preço atualizado: R$ ' || v_sale_price, 'new_price', v_sale_price);
-
+            IF v_move_type = 'ENTRADA' THEN
+                v_new_stock := v_old_stock + v_quantity;
+            ELSIF v_move_type = 'SAIDA' THEN
+                v_new_stock := v_old_stock - v_quantity;
+            ELSIF v_move_type = 'AJUSTE' THEN
+                v_new_stock := v_quantity;
             ELSE
-                RAISE EXCEPTION 'Ação Administrativa Inválida: %', p_action_type;
-        END CASE;
+                RAISE EXCEPTION 'Tipo de movimentação não reconhecido: %.', v_move_type;
+            END IF;
 
-        -- 5. Registro de Auditoria (Atomicamente vinculado)
-        INSERT INTO public.audit_logs (admin_id, admin_name, admin_email, action, category, details, payload)
-        VALUES (v_admin_id, v_admin_name, v_admin_email, p_action_type, 'GESTORA_V8', v_result->>'message', p_payload);
+            IF v_new_stock < 0 THEN
+                RAISE EXCEPTION 'Operação Negada: Saldo atual insuficiente para retirada (Disponível: %).', v_old_stock;
+            END IF;
 
-        -- 6. Concluir Idempotência
-        UPDATE public.idempotency_keys SET status = 'SUCCESS', response = v_result, updated_at = now() WHERE key_hash = p_idempotency_key;
+            -- Atualização do Saldo
+            UPDATE public.products SET stock_quantity = v_new_stock, updated_at = now() WHERE id = v_product_id;
 
-    EXCEPTION WHEN OTHERS THEN
-        -- Rollback interno da transação é automático no Postgres se o erro subir.
-        -- Como o Supabase RPC roda tudo em uma única transação, o registro de idempotência em status 'ERROR'
-        -- só seria persistido se capturássemos o erro e déssemos commit. 
-        -- Mas preferimos o ROLLBACK TOTAL para permitir retentativa limpa se o erro for transiente.
-        RAISE;
-    END;
+            -- Registro do Histórico (Imutável)
+            INSERT INTO public.inventory_movements (product_id, type, quantity, previous_stock, new_stock, reason, admin_id, admin_name)
+            VALUES (v_product_id, v_move_type, v_quantity, v_old_stock, v_new_stock, COALESCE(p_payload->>'reason', 'Ajuste via IA Gestora'), v_admin_id, v_admin_name);
+
+            v_result := jsonb_build_object('success', true, 'message', 'Estoque atualizado com sucesso. Novo saldo: ' || v_new_stock, 'new_stock', v_new_stock);
+
+        WHEN 'UPDATE_PRICE' THEN
+            v_product_id := p_payload->>'productId';
+            v_sale_price := (p_payload->>'newPrice')::NUMERIC;
+
+            IF v_product_id IS NULL OR v_sale_price IS NULL OR v_sale_price <= 0 THEN
+                RAISE EXCEPTION 'Valor de preço inválido: Deve ser positivo e numérico.';
+            END IF;
+
+            UPDATE public.products SET sale_price = v_sale_price, updated_at = now() WHERE id = v_product_id;
+            IF NOT FOUND THEN RAISE EXCEPTION 'Produto não localizado para atualização de preço.'; END IF;
+
+            v_result := jsonb_build_object('success', true, 'message', 'Preço ajustado para R$ ' || v_sale_price, 'new_price', v_sale_price);
+
+        ELSE
+            RAISE EXCEPTION 'Ação Administrativa não suportada: %', p_action_type;
+    END CASE;
+
+    -- 4. Registro Final de Auditoria e Conclusão de Idempotência (Tudo na mesma transação)
+    INSERT INTO public.audit_logs (admin_id, admin_name, admin_email, action, category, details, payload)
+    VALUES (v_admin_id, v_admin_name, v_admin_email, p_action_type, 'IA_GESTORA', v_result->>'message', p_payload);
+
+    UPDATE public.idempotency_keys SET status = 'SUCCESS', response = v_result, updated_at = now() WHERE key_hash = p_idempotency_key;
 
     RETURN v_result;
+
+EXCEPTION WHEN OTHERS THEN
+    -- O ROLLBACK automático do Supabase RPC garante que se houver falha, 
+    -- o registro em idempotency_keys (PROCESSING) também será revertido.
+    RAISE;
 END;
 $$;
 
--- 5. PRIVILÉGIOS (Proteção contra acesso não autorizado)
+-- 5. PRIVILÉGIOS (Proteção Final)
 
 REVOKE ALL ON FUNCTION public.execute_gestora_operation_v8_2(TEXT, TEXT, JSONB) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.execute_gestora_operation_v8_2(TEXT, TEXT, JSONB) TO authenticated;
 
--- Leitura restrita para auditoria
 GRANT SELECT ON public.audit_logs TO authenticated;
 GRANT SELECT ON public.inventory_movements TO authenticated;
 GRANT SELECT ON public.idempotency_keys TO authenticated;
 
--- FIM DO SQL V8.2
+-- FIM DO SQL V8.2 DEFINITIVO
